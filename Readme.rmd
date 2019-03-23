@@ -1,7 +1,7 @@
 ---
-title: "Readme"
+title: "The Kingdom of God Is Within You"
 author: "Jamie Hargreaves"
-date: "23/03/2019"
+date: "23 March, 2019"
 output: rmarkdown::github_document
 ---
 
@@ -9,22 +9,47 @@ output: rmarkdown::github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
+<style>
+body{
+  font-family: Lato;
+  font-size: 12pt;
+}
+</style>
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+## Setting up
+#### Loading libraries
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+We'll start by loading the relevant libraries and importing the data: we'll be using tidyverse for packages such as dplyr and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly ```%<>%```, since ```%>%``` is already loaded with tidyverse), and gutenbergr for our book.
 
-```{r cars}
-summary(cars)
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+library(tidytext)
+library(magrittr)
+library(gutenbergr)
 ```
 
-## Including Plots
+#### Importing our data
 
-You can also embed plots, for example:
+We'll be using [Project Gutenberg](http://www.gutenberg.org/) as the source of our text data. We can see the list of books available from Project Gutenberg using the gutenbergr package:
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r}
+gutenberg_metadata
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+We can use dplyr and stringr to look for any books similar to our title, since there might be multiple versions available from Project Gutenberg:
+
+```{r}
+gutenberg_metadata %>%
+  filter(str_detect(str_to_lower(title), "kingdom of god")) %>%
+  select(title, gutenberg_id)
+```
+
+We want the second book in the list, so we'll pass its ID to the ```gutenberg_download``` function:
+
+```{r, message = FALSE}
+book <- gutenberg_download(43302)
+book %<>%
+  select(-one_of("gutenberg_id"))
+book %>%
+  head()
+```
