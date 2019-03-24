@@ -9,17 +9,10 @@ output: rmarkdown::github_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-<style>
-body{
-  font-family: Lato;
-  font-size: 12pt;
-}
-</style>
-
 ## Setting up
 #### Loading libraries
 
-We'll start by loading the relevant libraries and importing the data: we'll be using tidyverse for packages such as dplyr and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly ```%<>%```, since ```%>%``` is already loaded with tidyverse), and gutenbergr for our book.
+We'll start by loading the relevant libraries and importing the data: we'll be using tidyverse for packages such as dplyr, ggplot2 and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly ```%<>%```, since ```%>%``` is already loaded with tidyverse), and gutenbergr for our book.
 
 ```{r, warning = FALSE, message = FALSE}
 library(tidyverse)
@@ -30,7 +23,7 @@ library(gutenbergr)
 
 #### Importing our data
 
-We'll be using [Project Gutenberg](http://www.gutenberg.org/) as the source of our text data. We can see the list of books available from Project Gutenberg using the gutenbergr package:
+We'll be using [Project Gutenberg](http://www.gutenberg.org/) as the source of our text data. We can see the list of books available from Project Gutenberg using the ```gutenberg_metadata``` function from the gutenbergr package:
 
 ```{r}
 gutenberg_metadata
@@ -50,6 +43,115 @@ We want the second book in the list, so we'll pass its ID to the ```gutenberg_do
 book <- gutenberg_download(43302)
 book %<>%
   select(-one_of("gutenberg_id"))
+
+book %>%
+  head(12)
+```
+
+### Pre-processing
+
+Before we do anything else, we need to clean the text up a little. We can see already that we have several rows containing only ```""``` and we also look to have a preface and other text preceeding the first chapter of the book. We'll add chapter and line numbers to our tibble and filter out anything before the first chapter. For the line number we'll use the ```row_number()``` function from dplyr, and to work out which chapter each line is in we'll use a cumulative sum to count the occurrences of a regular expression ```"chapter [\\divxlc]"```, i.e. "chapter" followed by a number or Roman numeral (any combination of "I", "V", "X", "L" or "C"):
+
+```{r}
+book %<>%
+  filter(text != "") %>%
+  mutate(
+    chapter = cumsum(
+      str_detect(text, regex("chapter [\\divxlc]", ignore_case = TRUE))
+    )
+  ) %>%
+  filter(chapter > 0) %>%
+  mutate(line = row_number()) %>%
+  select(chapter, line, text)
+
 book %>%
   head()
+```
+
+We should also look at the last lines in the book to make sure we haven't included any appendices or similar sections that might distort our analysis:
+
+```{r}
+book %>%
+  arrange(desc(line))
+```
+
+We can see that the book actually ends on line 11,200, so we'll remove any lines after that:
+
+```{r}
+book %<>%
+  filter(line <= 11200)
+```
+
+We can now use tidytext's ```unnest_tokens()``` function to tokenise our text, i.e. convert it to a one-word-per-row tibble:
+
+```{r}
+book_tokenised <- book %>%
+  unnest_tokens(word, text)
+```
+
+Project Gutenberg uses ```_``` to denote words which are italicised, so we're likely to have some of these words in our tokenised tibble:
+
+```{r}
+book_tokenised %>%
+  filter(str_detect(word, "_"))
+```
+
+We've returned some instances of underscored words, so we'll remove them using a regular expression in ```str_extract()``` from the stringr package:
+
+```{r}
+book_tokenised %<>%
+  mutate(word = str_extract(word, "[\\da-z]+"))
+```
+
+Now that our book is tokenised, we need to remove any stop words (like "I", "and", "to" etc.). Luckily, the tidytext package includes a stop-words data set, and we can use ```anti_join()``` from dplyr along with our tokenised tibble to remove them:
+
+```{r message = FALSE}
+data(stop_words)
+
+book_tokenised %<>%
+  anti_join(stop_words)
+```
+
+
+### Word Analysis
+
+Now that our data is in a tidy format, we can easily start to analyse it using tools from the tidyverse. Let's start by looking at the overall top ten words using dplyr's ```top_n()``` function and ggplot2:
+
+```{r message = FALSE, fig.align = "center", fig.retina = 2}
+book_tokenised %>%
+  count(word, sort = TRUE) %>%
+  top_n(10) %>%
+  ggplot(aes(x = reorder(word, n), y = n)) + 
+  geom_col() + 
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Frequency")
+```
+
+We can also see the top words per chapter; for the sake of readability we'll restrict ourselves to the top 3 words per chapter:
+
+```{r message = FALSE, fig.width = 13, fig.retina = 2}
+book_tokenised %>%
+  group_by(chapter) %>%
+  count(word, sort = TRUE) %>%
+  arrange(chapter) %>%
+  top_n(3) %>%
+  ggplot(aes(x = word, y = n, fill = as.factor(chapter))) +
+  geom_col(show.legend = FALSE) + 
+  coord_flip() +
+  facet_grid(~chapter, scales = "free_x") + 
+  xlab(NULL) + 
+  ylab("Frequency") + 
+  theme(axis.text.x = element_text(angle = 35))
+```
+
+### Sentiment Analysis
+
+Next, let's look at performing an analysis of the sentiments of The Kingdom of God Is Within You. We'll use the ```AFINN``` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful ```get_sentiments()``` function to easily grab the lexicon, and we can use the ```inner_join()``` function to score each word:
+
+```{r message = FALSE}
+afinn <- get_sentiments("afinn")
+
+book_sentiments <- book_tokenised %>%
+  inner_join(afinn)
 ```
