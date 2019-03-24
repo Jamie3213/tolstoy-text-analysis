@@ -8,13 +8,14 @@ Setting up
 
 #### Loading libraries
 
-We'll start by loading the relevant libraries and importing the data: we'll be using tidyverse for packages such as dplyr, ggplot2 and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly `%<>%`, since `%>%` is already loaded with tidyverse), and gutenbergr for our book.
+We'll start by loading the relevant libraries and importing the data. We'll be using tidyverse for dplyr, ggplot2 and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly `%<>%`, since `%>%` is already loaded with tidyverse), gutenbergr for our book and syuzhet for low pass filtering. Note that whilst we won't load the library, we'll need to also make sure that the cowplot package is installed, as we'll be making use of the `cowplot::plot_grid()` function later on.
 
 ``` r
 library(tidyverse)
 library(tidytext)
 library(magrittr)
 library(gutenbergr)
+library(syuzhet)
 ```
 
 #### Importing our data
@@ -220,7 +221,7 @@ book_tokenised %>%
   facet_grid(~chapter, scales = "free_x") + 
   xlab(NULL) + 
   ylab("Frequency") + 
-  theme(axis.text.x = element_text(angle = 35))
+  theme(axis.text.x = element_text(angle = 45))
 ```
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-13-1.png" width="1248" />
@@ -234,4 +235,67 @@ afinn <- get_sentiments("afinn")
 
 book_sentiments <- book_tokenised %>%
   inner_join(afinn)
+
+book_sentiments %>%
+  head()
 ```
+
+    ## # A tibble: 6 x 4
+    ##   chapter  line word    score
+    ##     <int> <int> <chr>   <int>
+    ## 1       1     2 evil       -3
+    ## 2       1     8 faith       1
+    ## 3       1     9 war        -2
+    ## 4       1    10 refused    -2
+    ## 5       1    11 hostile    -2
+    ## 6       1    12 refuse     -2
+
+We want to calculate the net sentiment over a sensible period; we could look at net sentiment per chapter, but it's unlikely to tell us anything truly meaningful since a lot of the nuance would likely be lost. Instead, we'll look at the net sentiment per "paragraph" which I'm going to define to be every 50 words (remembering that we've taken out a lot of stop-words, so our "paragraphs" should probably be somewhat shorter than a typical, physical paragraph).
+
+``` r
+book_sentiments %>%
+  mutate(paragraph = row_number()%/%50) %>%
+  group_by(paragraph) %>%
+  summarise(netscore = sum(score)) %>%
+  ggplot(aes(x = paragraph, y = netscore)) + 
+  geom_col() + 
+  xlab("Paragraph") + 
+  ylab("Net Sentiment Score")
+```
+
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-15-1.png" width="672" style="display: block; margin: auto;" />
+
+As an aside, we can create a smoothed approximation of the net sentiment score to get a clearer idea of the general sentiment trend as the book goes on (we'll use the syuzhet package for this):
+
+``` r
+# net sentiment score per paragraph
+sentiment_per_paragraph <- book_sentiments %>%
+  mutate(paragraph = row_number()%/%50) %>%
+  group_by(paragraph) %>%
+  summarise(netscore = sum(score)) 
+
+# original plot
+net_sentiment_raw <- sentiment_per_paragraph %>%
+  ggplot(aes(x = paragraph, y = netscore)) + 
+  geom_col() + 
+  xlab("Paragraph") + 
+  ylab(NULL)
+
+# transformed plot
+smooth_sentiment <- get_dct_transform(sentiment_per_paragraph[[2]], low_pass_size = 15, 
+                                      scale_vals = TRUE)
+
+book_theme <- data.frame(paragraph = 1:length(smooth_sentiment), score = smooth_sentiment) %>%
+  as_tibble()
+
+net_sentiment_trans <- book_theme %>%
+  ggplot(aes(x = paragraph, y = score)) +
+  geom_col(width = 0.2, fill = "orange") + 
+  geom_line(colour = "orange2", size = 1.1) + 
+  xlab("Paragraph") + 
+  ylab(NULL)
+
+cowplot::plot_grid(net_sentiment_raw, net_sentiment_trans, labels = NULL)
+```
+
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="1248" />
