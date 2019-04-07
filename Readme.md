@@ -8,7 +8,7 @@ Setting up
 
 #### Loading libraries
 
-We'll start by loading the relevant libraries and importing the data. We'll be using tidyverse for dplyr, ggplot2 and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly `%<>%`, since `%>%` is already loaded with tidyverse), gutenbergr for our book and syuzhet for low pass filtering. Note that whilst we won't load the library, we'll need to also make sure that the cowplot package is installed, as we'll be making use of the `cowplot::plot_grid()` function later on.
+We'll start by loading the relevant libraries and importing the data. We'll be using tidyverse for dplyr, ggplot2, tidyr and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly `%<>%`, since `%>%` is already loaded with tidyverse), gutenbergr for our book, syuzhet for low pass filtering and ggraph to look at the connections between words. Note that whilst we won't load the library, we'll need to also make sure that the cowplot package is installed, as we'll be making use of the `cowplot::plot_grid()` function later on.
 
 ``` r
 library(tidyverse)
@@ -16,6 +16,7 @@ library(tidytext)
 library(magrittr)
 library(gutenbergr)
 library(syuzhet)
+library(ggraph)
 ```
 
 #### Importing our data
@@ -174,11 +175,11 @@ book_tokenised %>%
     ## 10       1   317 _q        
     ## # … with 155 more rows
 
-We've returned some instances of underscored words, so we'll remove them using a regular expression in `str_extract()` from the stringr package:
+We've returned some instances of underscored words, so we'll remove them using `str_replace_all()` from the stringr package:
 
 ``` r
 book_tokenised %<>%
-  mutate(word = str_extract(word, "[\\da-z]+"))
+  mutate(word = str_replace_all(word, "_", ""))
 ```
 
 Now that our book is tokenised, we need to remove any stop words (like "I", "and", "to" etc.). Luckily, the tidytext package includes a stop-words data set, and we can use `anti_join()` from dplyr along with our tokenised tibble to remove them:
@@ -190,7 +191,7 @@ book_tokenised %<>%
   anti_join(stop_words)
 ```
 
-### Word Analysis
+### Single Word Analysis
 
 Now that our data is in a tidy format, we can easily start to analyse it using tools from the tidyverse. Let's start by looking at the overall top ten words using dplyr's `top_n()` function and ggplot2:
 
@@ -207,7 +208,7 @@ book_tokenised %>%
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-12-1.png" width="672" style="display: block; margin: auto;" />
 
-We can also see the top words per chapter; for the sake of readability we'll restrict ourselves to the top 3 words per chapter:
+We can also see the top words per chapter, however for the sake of readability we'll restrict ourselves to the top 3 words:
 
 ``` r
 book_tokenised %>%
@@ -224,31 +225,108 @@ book_tokenised %>%
   theme(axis.text.x = element_text(angle = 45))
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-13-1.png" width="1248" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-13-1.png" width="1248" style="display: block; margin: auto;" />
+
+### Analysing *n*-grams
+
+We've done some analysis of the individual words within our book, but to get some more insight we can start to analyse *n*-grams, i.e. sequences of words. We can tokenise our book into bigrams using the `unnest_tokens()` function along with the additional `token = "ngrams"` argument (note that again we'll need remove any underscores from our bigrams):
+
+``` r
+book_bigrams <- book %>%
+  select(chapter, text) %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  mutate(bigram = str_replace_all(bigram, "_", ""))
+
+book_bigrams %>%
+  head()
+```
+
+    ## # A tibble: 6 x 2
+    ##   chapter bigram        
+    ##     <int> <chr>         
+    ## 1       1 chapter i     
+    ## 2       1 i the         
+    ## 3       1 the doctrine  
+    ## 4       1 doctrine of   
+    ## 5       1 of non        
+    ## 6       1 non resistance
+
+Before we remove any stop words from our bigrams, we'll split them into separate columns using the `separate()` function from tidyr:
+
+``` r
+book_bigrams_separated <- book_bigrams %>%
+  separate(bigram, c("word1", "word2"), sep = " ")
+
+book_bigrams_separated %>%
+  head()
+```
+
+    ## # A tibble: 6 x 3
+    ##   chapter word1    word2     
+    ##     <int> <chr>    <chr>     
+    ## 1       1 chapter  i         
+    ## 2       1 i        the       
+    ## 3       1 the      doctrine  
+    ## 4       1 doctrine of        
+    ## 5       1 of       non       
+    ## 6       1 non      resistance
+
+Now we'll use the `stop_words` dataset to remove any stop words, unite the data and take a look at the most frequent bigrams:
+
+``` r
+book_bigrams_filtered <- book_bigrams_separated %>%
+  filter(!word1 %in% stop_words$word) %>%
+  filter(!word2 %in% stop_words$word)
+
+book_bigrams_filtered %>%
+  unite(bigram, word1, word2, sep = " ") %>%
+  count(bigram, sort = TRUE) %>%
+  top_n(10) %>%
+  ggplot(aes(x = reorder(bigram, n), y = n)) +
+  geom_col() +
+  coord_flip() + 
+  xlab(NULL) + 
+  ylab("Frequency")
+```
+
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="672" style="display: block; margin: auto;" />
+
+To get a feel for the connections between bigrams, we can make use of the `ggraph` package to produce a network graph of common bigrams:
+
+``` r
+set.seed(100)
+
+book_bigrams_filtered %>%
+  count(word1, word2, sort = TRUE) %>%
+  filter(n > 10) %>%
+  igraph::graph_from_data_frame() %>%
+  ggraph(layout = "kk") + 
+  geom_edge_link(
+    aes(width = n), 
+    alpha = 0.3, 
+    colour = "orange", 
+    show.legend = FALSE
+  ) + 
+  geom_node_point(colour = "orange2", size = 5) + 
+  geom_node_text(aes(label = name), vjust = 1, hjust = -0.25, size = 3) + 
+  coord_cartesian(clip = "off") + 
+  theme_graph()
+```
+
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-17-1.png" width="768" style="display: block; margin: auto;" />
+
+The thicker the connection between two words, the more frequently those words appeared together. Unsurprisingly, we can see that words like "christ's teaching" and "military service" appear frequently, reflecting the common themes of the book.
 
 ### Sentiment Analysis
 
-Next, let's look at performing an analysis of the sentiments of The Kingdom of God Is Within You. We'll use the `AFINN` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful `get_sentiments()` function to easily grab the lexicon, and we can use the `inner_join()` function to score each word:
+Next, let's look at performing an analysis of the sentiments of our book. We'll use the `AFINN` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful `get_sentiments()` function to easily grab the lexicon, and we can use the `inner_join()` function to score each word:
 
 ``` r
 afinn <- get_sentiments("afinn")
 
 book_sentiments <- book_tokenised %>%
   inner_join(afinn)
-
-book_sentiments %>%
-  head()
 ```
-
-    ## # A tibble: 6 x 4
-    ##   chapter  line word    score
-    ##     <int> <int> <chr>   <int>
-    ## 1       1     2 evil       -3
-    ## 2       1     8 faith       1
-    ## 3       1     9 war        -2
-    ## 4       1    10 refused    -2
-    ## 5       1    11 hostile    -2
-    ## 6       1    12 refuse     -2
 
 We want to calculate the net sentiment over a sensible period; we could look at net sentiment per chapter, but it's unlikely to tell us anything truly meaningful since a lot of the nuance would likely be lost. Instead, we'll look at the net sentiment per "paragraph" which I'm going to define to be every 50 words (remembering that we've taken out a lot of stop-words, so our "paragraphs" should probably be somewhat shorter than a typical, physical paragraph).
 
@@ -263,7 +341,7 @@ book_sentiments %>%
   ylab("Net Sentiment Score")
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-15-1.png" width="672" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-19-1.png" width="672" style="display: block; margin: auto;" />
 
 As an aside, we can create a smoothed approximation of the net sentiment score to get a clearer idea of the general sentiment trend as the book goes on (we'll use the syuzhet package for this):
 
@@ -283,14 +361,15 @@ net_sentiment_raw <- sentiment_per_paragraph %>%
 
 # transformed plot
 smooth_sentiment <- get_dct_transform(sentiment_per_paragraph[[2]], low_pass_size = 15, 
-                                      scale_vals = TRUE)
+                                      scale_vals = TRUE, 
+                                      x_reverse_len = nrow(sentiment_per_paragraph))
 
 book_theme <- data.frame(paragraph = 1:length(smooth_sentiment), score = smooth_sentiment) %>%
   as_tibble()
 
 net_sentiment_trans <- book_theme %>%
   ggplot(aes(x = paragraph, y = score)) +
-  geom_col(width = 0.2, fill = "orange") + 
+  geom_col(width = 0.3, fill = "orange") + 
   geom_line(colour = "orange2", size = 1.1) + 
   xlab("Paragraph") + 
   ylab(NULL)
@@ -298,4 +377,62 @@ net_sentiment_trans <- book_theme %>%
 cowplot::plot_grid(net_sentiment_raw, net_sentiment_trans, labels = NULL)
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="1248" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-20-1.png" width="1248" />
+
+Whilst the above is insightful, it doesn't take into account context. When we remove stop-words, we also remove negations, meaning phrases like "no good" and "not happy" are truncated to "good" and "happy", and (misleadingly) receive a positive sentiment score. We can look at words preceeded by negations such as "no", "not" or "never" using the bigrmas we created previously:
+
+``` r
+negations <- c("no", "not", "never")
+stop_words_filtered <- stop_words %>%
+  filter(!word %in% negations)
+
+bigram_negations <- book_bigrams_separated %>%
+  filter(!word1 %in% stop_words_filtered$word) %>%
+  filter(!word2 %in% stop_words$word) %>%
+  filter(word1 == "no" | word1 == "not" | word1 == "never") 
+
+bigram_negations %>%
+  count(word1, word2, sort = TRUE) %>%
+  head(10)
+```
+
+    ## # A tibble: 10 x 3
+    ##    word1 word2          n
+    ##    <chr> <chr>      <int>
+    ##  1 not   free          14
+    ##  2 not   understand    12
+    ##  3 no    doubt         10
+    ##  4 not   recognize     10
+    ##  5 not   evil           7
+    ##  6 no    external       6
+    ##  7 no    war            6
+    ##  8 not   kill           6
+    ##  9 not   opposed        6
+    ## 10 no    meaning        5
+
+We can then look at how much these words have "mislead" us by looking at the overall contribution of each word to the net sentiment, i.e. the word's sentiment score multiplied by the number of times it occurs:
+
+``` r
+negation_contribution <- bigram_negations %>%
+  count(word2, sort = TRUE) %>%
+  inner_join(afinn, by = c(word2 = "word")) %>%
+  mutate(contribution = n * score) %>%
+  arrange(desc(abs(contribution)))
+  
+negation_contribution
+```
+
+    ## # A tibble: 90 x 4
+    ##    word2      n score contribution
+    ##    <chr>  <int> <int>        <int>
+    ##  1 evil       8    -3          -24
+    ##  2 kill       6    -3          -18
+    ##  3 free      14     1           14
+    ##  4 war        6    -2          -12
+    ##  5 doubt     10    -1          -10
+    ##  6 harm       5    -2          -10
+    ##  7 lost       3    -3           -9
+    ##  8 true       4     2            8
+    ##  9 worth      4     2            8
+    ## 10 escape     6    -1           -6
+    ## # … with 80 more rows
