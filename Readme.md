@@ -291,7 +291,7 @@ book_bigrams_filtered %>%
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="672" style="display: block; margin: auto;" />
 
-To get a feel for the connections between bigrams, we can make use of the `ggraph` package to produce a network graph of common bigrams:
+To visualise how these terms are connected, we can make use of the `ggraph` package to produce a network graph of common bigrams:
 
 ``` r
 set.seed(100)
@@ -315,7 +315,7 @@ book_bigrams_filtered %>%
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-17-1.png" width="768" style="display: block; margin: auto;" />
 
-The thicker the connection between two words, the more frequently those words appeared together. Unsurprisingly, we can see that words like "christ's teaching" and "military service" appear frequently, reflecting the common themes of the book.
+The thicker the connection between two words, the more frequently those words appeared together. Unsurprisingly, we can see that a word like "christian" forms a central node reflecting its prominence throughout the book.
 
 ### Sentiment Analysis
 
@@ -436,3 +436,31 @@ negation_contribution
     ##  9 worth      4     2            8
     ## 10 escape     6    -1           -6
     ## # … with 80 more rows
+
+This time, rather than a bar chart, we'll use a "lollipop" plot to visualise the contribution:
+
+``` r
+negation_contribution %>%
+  head(20) %>%
+  ggplot(aes(x = reorder(word2, contribution), y = contribution)) + 
+  geom_segment(aes(x = reorder(word2, contribution), 
+                      xend = 
+                      reorder(word2,contribution), 
+                      y = 0, 
+                      yend = contribution), 
+                      colour = "gray") +
+  geom_point(aes(colour = contribution > 0), show.legend = FALSE, size = 3.5) +
+  coord_flip() + 
+  xlab("Words Preceeded by Negation") + 
+  ylab("Contribution (n*score)") +
+  theme(
+    plot.background = element_blank(),
+    panel.background = element_rect(fill = "gray94"),
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor.y = element_blank(),
+    panel.grid.major.x = element_line(colour = "lightgray"),
+    panel.grid.minor.x = element_line(colour = "lightgray", linetype = "dashed")
+  )
+```
+
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-23-1.png" width="672" style="display: block; margin: auto;" />
