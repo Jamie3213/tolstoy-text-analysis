@@ -3,6 +3,11 @@ The Kingdom of God Is Within You
 Jamie Hargreaves
 23 March, 2019
 
+<style>
+  body{
+    font-size: 14px;
+  }
+</style>
 Setting up
 ----------
 
@@ -139,7 +144,7 @@ book %>%
     ## 10      13 11200 "                    THE END."                            
     ## # … with 11,199 more rows
 
-We can see that the book actually ends on line 11,200, so we'll remove any lines after that:
+We can see that the book actually ends on line 11,200 so we'll remove any lines after that:
 
 ``` r
 book %<>%
@@ -315,11 +320,11 @@ book_bigrams_filtered %>%
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-17-1.png" width="768" style="display: block; margin: auto;" />
 
-The thicker the connection between two words, the more frequently those words appeared together. Unsurprisingly, we can see that a word like "christian" forms a central node reflecting its prominence throughout the book.
+The thicker the connection between two words, the more frequently those words appeared together. We can see that a word like "christian" forms a central node reflecting its prominence throughout the book, and we can see the prominence of topics such as military service and "christ's teaching".
 
 ### Sentiment Analysis
 
-Next, let's look at performing an analysis of the sentiments of our book. We'll use the `AFINN` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful `get_sentiments()` function to easily grab the lexicon, and we can use the `inner_join()` function to score each word:
+Next, let's look at performing some sentiment analysis. We'll use the `AFINN` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful `get_sentiments()` function to easily grab the lexicon, and we can use the `inner_join()` function to score each word:
 
 ``` r
 afinn <- get_sentiments("afinn")
@@ -464,3 +469,9 @@ negation_contribution %>%
 ```
 
 <img src="Readme_files/figure-markdown_github/unnamed-chunk-23-1.png" width="672" style="display: block; margin: auto;" />
+
+We can see that negations of "evil", kill" and "free" are responsible for a large amount of the false sentiment scoring.
+
+### Conclusion
+
+As we can see, by utilising tidy principles and tools, we can quickly (and fairly easily) start to analyse text data and establish common themes and sentiments.
