@@ -1,19 +1,20 @@
 The Kingdom of God Is Within You
 ================
 Jamie Hargreaves
-23 March, 2019
 
 <style>
   body{
     font-size: 14px;
   }
 </style>
-Setting up
-----------
+Introduction and Setting Up
+---------------------------
+
+In this project, we'll use tools from the tidyverse to do some simple exploratory analysis (followed by some sentiment analysis), of "The Kingdom of God is Within You", by Leo Tolstoy. We'll be using [Project Gutenberg](http://www.gutenberg.org/) as our data source.
 
 #### Loading libraries
 
-We'll start by loading the relevant libraries and importing the data. We'll be using tidyverse for dplyr, ggplot2, tidyr and stringr, tidytext as the basis for our text mining, magrittr for its pipes (mainly `%<>%`, since `%>%` is already loaded with tidyverse), gutenbergr for our book, syuzhet for low pass filtering and ggraph to look at the connections between words. Note that whilst we won't load the library, we'll need to also make sure that the cowplot package is installed, as we'll be making use of the `cowplot::plot_grid()` function later on.
+Let's load our libraries and download the data. Note that whilst we won't explicitly load the library, we'll need to make sure that the cowplot package is installed so we can use of the `cowplot::plot_grid()` function later on.
 
 ``` r
 library(tidyverse)
@@ -26,7 +27,7 @@ library(ggraph)
 
 #### Importing our data
 
-We'll be using [Project Gutenberg](http://www.gutenberg.org/) as the source of our text data. We can see the list of books available from Project Gutenberg using the `gutenberg_metadata` function from the gutenbergr package:
+We can see the list of books available from Project Gutenberg using the `gutenberg_metadata` function from the gutenbergr package:
 
 ``` r
 gutenberg_metadata
@@ -48,7 +49,7 @@ gutenberg_metadata
     ## # … with 51,987 more rows, and 2 more variables: rights <chr>,
     ## #   has_text <lgl>
 
-We can use dplyr and stringr to look for any books similar to our title, since there might be multiple versions available from Project Gutenberg:
+We'll use dplyr and stringr to look for any books similar to our title, since there might be multiple versions available from Project Gutenberg, and download using the book ID
 
 ``` r
 gutenberg_metadata %>%
@@ -64,8 +65,6 @@ gutenberg_metadata %>%
     ## 3 The Kingdom of God is Within You / Christianity and Patriot…        43372
     ## 4 The Kingdom of God is Within You, What is Art                       43409
     ## 5 The Kingdom of God, Part 1                                          46244
-
-We want the second book in the list, so we'll pass its ID to the `gutenberg_download` function:
 
 ``` r
 book <- gutenberg_download(43302)
@@ -92,9 +91,9 @@ book %>%
     ## 11 ""                                        
     ## 12 "  TRANSLATED FROM THE RUSSIAN OF"
 
-### Pre-processing
+#### Pre-processing
 
-Before we do anything else, we need to clean the text up a little. We can see already that we have several rows containing only `""` and we also look to have a preface and other text preceeding the first chapter of the book. We'll add chapter and line numbers to our tibble and filter out anything before the first chapter. For the line number we'll use the `row_number()` function from dplyr, and to work out which chapter each line is in we'll use a cumulative sum to count the occurrences of a regular expression `"chapter [\\divxlc]"`, i.e. "chapter" followed by a number or Roman numeral (any combination of "I", "V", "X", "L" or "C"):
+Before we do anything else, we need to clean the text up a little. We can see already that we have several rows containing only `""` and we also look to have a preface and other text preceeding the first chapter of the book. We'll add chapter and line numbers and filter out anything before the first chapter:
 
 ``` r
 book %<>%
@@ -144,21 +143,21 @@ book %>%
     ## 10      13 11200 "                    THE END."                            
     ## # … with 11,199 more rows
 
-We can see that the book actually ends on line 11,200 so we'll remove any lines after that:
+The book actually ends on line 11,200 so let's get rid of any lines after that:
 
 ``` r
 book %<>%
   filter(line <= 11200)
 ```
 
-We can now use tidytext's `unnest_tokens()` function to tokenise our text, i.e. convert it to a one-word-per-row tibble:
+Now we'll tokenise the text:
 
 ``` r
 book_tokenised <- book %>%
   unnest_tokens(word, text)
 ```
 
-Project Gutenberg uses `_` to denote words which are italicised, so we're likely to have some of these words in our tokenised tibble:
+Project Gutenberg uses `_` to denote words which are italicised, so we're likely to have some of these words in our text:
 
 ``` r
 book_tokenised %>%
@@ -180,14 +179,14 @@ book_tokenised %>%
     ## 10       1   317 _q        
     ## # … with 155 more rows
 
-We've returned some instances of underscored words, so we'll remove them using `str_replace_all()` from the stringr package:
+We've returned some instances of underscored words, so let's remove them:
 
 ``` r
 book_tokenised %<>%
   mutate(word = str_replace_all(word, "_", ""))
 ```
 
-Now that our book is tokenised, we need to remove any stop words (like "I", "and", "to" etc.). Luckily, the tidytext package includes a stop-words data set, and we can use `anti_join()` from dplyr along with our tokenised tibble to remove them:
+Now that our book is tokenised, we need to remove any stop-words (like "I", "and", "to" etc.):
 
 ``` r
 data(stop_words)
@@ -196,9 +195,10 @@ book_tokenised %<>%
   anti_join(stop_words)
 ```
 
-### Single Word Analysis
+Single Word Analysis
+--------------------
 
-Now that our data is in a tidy format, we can easily start to analyse it using tools from the tidyverse. Let's start by looking at the overall top ten words using dplyr's `top_n()` function and ggplot2:
+The data is in a tidy format, so we can start to analyse it. Let's look at the top ten words:
 
 ``` r
 book_tokenised %>%
@@ -211,9 +211,9 @@ book_tokenised %>%
   ylab("Frequency")
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-12-1.png" width="672" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-11-1.png" width="672" style="display: block; margin: auto;" />
 
-We can also see the top words per chapter, however for the sake of readability we'll restrict ourselves to the top 3 words:
+We can also see the top words per chapter. For the sake of readability we'll restrict ourselves to the top 3:
 
 ``` r
 book_tokenised %>%
@@ -230,11 +230,12 @@ book_tokenised %>%
   theme(axis.text.x = element_text(angle = 45))
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-13-1.png" width="1248" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-12-1.png" width="1248" style="display: block; margin: auto;" />
 
-### Analysing *n*-grams
+Analysing *n*-grams
+-------------------
 
-We've done some analysis of the individual words within our book, but to get some more insight we can start to analyse *n*-grams, i.e. sequences of words. We can tokenise our book into bigrams using the `unnest_tokens()` function along with the additional `token = "ngrams"` argument (note that again we'll need remove any underscores from our bigrams):
+We can get further insight by analysing *n*-grams, i.e. sequences of words. We can tokenise our book into bigrams using tidytext:
 
 ``` r
 book_bigrams <- book %>%
@@ -256,7 +257,7 @@ book_bigrams %>%
     ## 5       1 of non        
     ## 6       1 non resistance
 
-Before we remove any stop words from our bigrams, we'll split them into separate columns using the `separate()` function from tidyr:
+Let's split the bigrams into two separate columns:
 
 ``` r
 book_bigrams_separated <- book_bigrams %>%
@@ -276,7 +277,7 @@ book_bigrams_separated %>%
     ## 5       1 of       non       
     ## 6       1 non      resistance
 
-Now we'll use the `stop_words` dataset to remove any stop words, unite the data and take a look at the most frequent bigrams:
+And now let's remove stop-words and take a look at the most frequent bigrams:
 
 ``` r
 book_bigrams_filtered <- book_bigrams_separated %>%
@@ -294,9 +295,9 @@ book_bigrams_filtered %>%
   ylab("Frequency")
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="672" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-15-1.png" width="672" style="display: block; margin: auto;" />
 
-To visualise how these terms are connected, we can make use of the `ggraph` package to produce a network graph of common bigrams:
+To visualise how these terms are connected, we'll use ggraph to produce a network graph of common bigrams:
 
 ``` r
 set.seed(100)
@@ -318,13 +319,13 @@ book_bigrams_filtered %>%
   theme_graph()
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-17-1.png" width="768" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-16-1.png" width="768" style="display: block; margin: auto;" />
 
-The thicker the connection between two words, the more frequently those words appeared together. We can see that a word like "christian" forms a central node reflecting its prominence throughout the book, and we can see the prominence of topics such as military service and "christ's teaching".
+The thicker the connection between two words, the more frequently those words appeared together. We can see that a word like "christian" forms a central node reflecting its prominence throughout the book, and we can see the prominence of topics like "military service" and "christ's teaching". Whilst this is fairly obvious for a book whose themes we already know, these networks can be extremely powerful when trying to piece together themes from things like survey results or tweets.
 
 ### Sentiment Analysis
 
-Next, let's look at performing some sentiment analysis. We'll use the `AFINN` lexicon to assign a sentiment score to each word in our tokenised data frame. The tidytext package includes a useful `get_sentiments()` function to easily grab the lexicon, and we can use the `inner_join()` function to score each word:
+Next, let's look at performing some sentiment analysis. We'll use the `AFINN` lexicon to assign a sentiment score to each word :
 
 ``` r
 afinn <- get_sentiments("afinn")
@@ -333,7 +334,7 @@ book_sentiments <- book_tokenised %>%
   inner_join(afinn)
 ```
 
-We want to calculate the net sentiment over a sensible period; we could look at net sentiment per chapter, but it's unlikely to tell us anything truly meaningful since a lot of the nuance would likely be lost. Instead, we'll look at the net sentiment per "paragraph" which I'm going to define to be every 50 words (remembering that we've taken out a lot of stop-words, so our "paragraphs" should probably be somewhat shorter than a typical, physical paragraph).
+We want to calculate the net sentiment over a sensible period; we could look at net sentiment per chapter, but it's unlikely to tell us anything genuinely meaningful since a lot of the nuance would likely be lost. Instead, we'll look at the net sentiment per "paragraph" which I'm going to define to be every 50 words (remembering that we've taken out a lot of stop-words, so our "paragraphs" should probably be shorter than a physical paragraph):
 
 ``` r
 book_sentiments %>%
@@ -346,9 +347,9 @@ book_sentiments %>%
   ylab("Net Sentiment Score")
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-19-1.png" width="672" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-18-1.png" width="672" style="display: block; margin: auto;" />
 
-As an aside, we can create a smoothed approximation of the net sentiment score to get a clearer idea of the general sentiment trend as the book goes on (we'll use the syuzhet package for this):
+As an aside, we can create a smoothed approximation of the net sentiment score to get a clearer idea of the general sentiment trend as the book goes on:
 
 ``` r
 # net sentiment score per paragraph
@@ -382,9 +383,9 @@ net_sentiment_trans <- book_theme %>%
 cowplot::plot_grid(net_sentiment_raw, net_sentiment_trans, labels = NULL)
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-20-1.png" width="1248" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-19-1.png" width="1248" />
 
-Whilst the above is insightful, it doesn't take into account context. When we remove stop-words, we also remove negations, meaning phrases like "no good" and "not happy" are truncated to "good" and "happy", and (misleadingly) receive a positive sentiment score. We can look at words preceeded by negations such as "no", "not" or "never" using the bigrmas we created previously:
+Whilst the above is insightful, it doesn't take into account context. When we remove stop-words, we also remove negations, meaning phrases like "no good" and "not happy" are truncated to "good" and "happy", and (misleadingly) area assigned a positive sentiment score. Let's look at words preceeded by negations such as "no", "not" or "never":
 
 ``` r
 negations <- c("no", "not", "never")
@@ -415,7 +416,7 @@ bigram_negations %>%
     ##  9 not   opposed        6
     ## 10 no    meaning        5
 
-We can then look at how much these words have "mislead" us by looking at the overall contribution of each word to the net sentiment, i.e. the word's sentiment score multiplied by the number of times it occurs:
+We can guage the extent to which these words have "mislead" us by looking at the overall contribution of each word to the net sentiment, i.e. the word's sentiment score multiplied by the number of times it occurs:
 
 ``` r
 negation_contribution <- bigram_negations %>%
@@ -442,7 +443,7 @@ negation_contribution
     ## 10 escape     6    -1           -6
     ## # … with 80 more rows
 
-This time, rather than a bar chart, we'll use a "lollipop" plot to visualise the contribution:
+Rather than a bar chart, let's use a "lollipop" plot to visualise the contribution:
 
 ``` r
 negation_contribution %>%
@@ -468,10 +469,6 @@ negation_contribution %>%
   )
 ```
 
-<img src="Readme_files/figure-markdown_github/unnamed-chunk-23-1.png" width="672" style="display: block; margin: auto;" />
+<img src="Readme_files/figure-markdown_github/unnamed-chunk-22-1.png" width="672" style="display: block; margin: auto;" />
 
 We can see that negations of "evil", kill" and "free" are responsible for a large amount of the false sentiment scoring.
-
-### Conclusion
-
-As we can see, by utilising tidy principles and tools, we can quickly (and fairly easily) start to analyse text data and establish common themes and sentiments.
