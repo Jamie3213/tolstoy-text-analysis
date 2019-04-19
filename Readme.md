@@ -2,11 +2,6 @@ The Kingdom of God Is Within You
 ================
 Jamie Hargreaves
 
-<style>
-  body{
-    font-size: 14px;
-  }
-</style>
 Introduction and Setting Up
 ---------------------------
 
@@ -323,7 +318,8 @@ book_bigrams_filtered %>%
 
 The thicker the connection between two words, the more frequently those words appeared together. We can see that a word like "christian" forms a central node reflecting its prominence throughout the book, and we can see the prominence of topics like "military service" and "christ's teaching". Whilst this is fairly obvious for a book whose themes we already know, these networks can be extremely powerful when trying to piece together themes from things like survey results or tweets.
 
-### Sentiment Analysis
+Sentiment Analysis
+------------------
 
 Next, let's look at performing some sentiment analysis. We'll use the `AFINN` lexicon to assign a sentiment score to each word :
 
