@@ -9,9 +9,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ```
 ## Introduction and Setting Up
 
-In this project, we'll use tools from the tidyverse to do some simple exploratory analysis (followed by some sentiment analysis), of "The Kingdom of God is Within You", by Leo Tolstoy. We'll be using [Project Gutenberg](http://www.gutenberg.org/) as our data source.
+In this project, we'll use tools from the tidyverse to do some simple exploratory analysis (followed by some sentiment analysis), of "The Kingdom of God is Within You", by Leo Tolstoy. We'll be using [Project Gutenberg](http://www.gutenberg.org/) as our data source. This project is heavily influenced by a number of blogs by Julia Silge who is also the co-author of the ```tidytext``` package.
 
-#### Loading libraries
+### Loading libraries
 
 Let's load our libraries and download the data. Note that whilst we won't explicitly load the library, we'll need to make sure that the cowplot package is installed so we can use of the ```cowplot::plot_grid()``` function later on.
 
@@ -24,7 +24,7 @@ library(syuzhet)
 library(ggraph)
 ```
 
-#### Importing our data
+### Importing our data
 
 We can see the list of books available from Project Gutenberg using the ```gutenberg_metadata``` function from the gutenbergr package:
 
@@ -47,7 +47,7 @@ book %>%
   head(12)
 ```
 
-#### Pre-processing
+### Pre-processing
 
 Before we do anything else, we need to clean the text up a little. We can see already that we have several rows containing only ```""``` and we also look to have a preface and other text preceeding the first chapter of the book. We'll add chapter and line numbers and filter out anything before the first chapter:
 
@@ -228,7 +228,7 @@ We want to calculate the net sentiment over a sensible period; we could look at 
 book_sentiments %>%
   mutate(paragraph = row_number()%/%50) %>%
   group_by(paragraph) %>%
-  summarise(netscore = sum(score)) %>%
+  summarise(netscore = sum(value)) %>%
   ggplot(aes(x = paragraph, y = netscore)) + 
   geom_col() + 
   xlab("Paragraph") + 
@@ -242,7 +242,7 @@ As an aside, we can create a smoothed approximation of the net sentiment score t
 sentiment_per_paragraph <- book_sentiments %>%
   mutate(paragraph = row_number()%/%50) %>%
   group_by(paragraph) %>%
-  summarise(netscore = sum(score)) 
+  summarise(netscore = sum(value)) 
 
 # original plot
 net_sentiment_raw <- sentiment_per_paragraph %>%
@@ -292,7 +292,7 @@ We can guage the extent to which these words have "mislead" us by looking at the
 negation_contribution <- bigram_negations %>%
   count(word2, sort = TRUE) %>%
   inner_join(afinn, by = c(word2 = "word")) %>%
-  mutate(contribution = n * score) %>%
+  mutate(contribution = n * value) %>%
   arrange(desc(abs(contribution)))
   
 negation_contribution
@@ -325,3 +325,7 @@ negation_contribution %>%
 ```
 
 We can see that negations of "evil", kill" and "free" are responsible for a large amount of the false sentiment scoring.
+
+## Conclusion
+
+We've seen that the ```tidytext``` package provides some extremely powerful tools that allow us analyse and understand pieces of text. We've been able to extract common words and phrases throughout the book, as well as identifying the strength of the connections between different phrases which provides significant insight into the underlying themes of the book. We've also seen how to perform analysis to understand the overall sentiment of the book and the way it changes throughout.
