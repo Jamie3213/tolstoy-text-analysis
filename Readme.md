@@ -1,4 +1,4 @@
-The Kingdom of God Is Within You
+Text Analysis With Tolstoy
 ================
 Jamie Hargreaves
 
